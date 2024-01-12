@@ -3,33 +3,29 @@
 //! numbers, so depending on the given precision errors will start accumulating
 //! after a while.
 
-//! Implementation that converts the recursive definition of the Fibonacci
-//! sequence to an iterative one, avoiding stack overflows and only computing
-//! each value once.
-
 use rug::{ops::Pow, Float, Integer};
 
-use crate::fib_finder::FibFinder;
+use crate::{fib_finder::FibFinder, repeated_squaring::power};
 
-/// Dynamic programming approach: iterates through all of the sequence to reach the given target.
-#[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
-pub struct Binet {
-    /// The precision to use. Higher values are slower but are correct for more values.
-    prec: u32,
-}
-
-impl Default for Binet {
-    fn default() -> Self {
-        Self { prec: 10000 }
-    }
-}
+/// Approach using Binet's formula.
+#[derive(Copy, Clone, Debug, Default, Hash, Eq, PartialEq)]
+pub struct Binet {}
 
 impl FibFinder for Binet {
     fn fib(&mut self, n: u64) -> Integer {
-        let one_half = Float::with_val(self.prec, 0.5);
-        let sqrt5 = Float::with_val(self.prec, 5).sqrt();
-        let phi = Float::with_val(self.prec, &one_half + &one_half * &sqrt5);
-        let ans = Float::with_val(self.prec, phi.pow(n) / sqrt5);
+        // using 1% more than necessary as a buffer
+        let prec: u32 = (1.05 * (n as f64) * Float::with_val(10, 1.618).log2())
+            .ceil()
+            .to_integer()
+            .unwrap()
+            .max(Integer::from(53))
+            .to_u32()
+            .unwrap()
+            + 10;
+        let one_half = Float::with_val(prec, 0.5);
+        let sqrt5 = Float::with_val(prec, 5).sqrt();
+        let phi = Float::with_val(prec, &one_half + &one_half * &sqrt5);
+        let ans = power(phi, n, Float::with_val(prec, 1)) / sqrt5;
         ans.to_integer().unwrap()
     }
 }
@@ -39,7 +35,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_fib() {
+    fn test_fib_binet() {
         let mut alg = Binet::default();
         assert_eq!(alg.fib(0), 0);
         assert_eq!(alg.fib(1), 1);
@@ -62,5 +58,10 @@ mod tests {
         );
 
         assert_eq!(alg.fib(10000) % (Integer::from(10).pow(10)), 9947366875_u64);
+
+        assert_eq!(
+            alg.fib(100_000) % (Integer::from(10).pow(10)),
+            3428746875_u64
+        );
     }
 }
